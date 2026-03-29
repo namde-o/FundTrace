@@ -1,0 +1,423 @@
+/* ──────────────────────────────────────────────────────────────────────────────
+   style.css — FundTrace Dashboard
+   Custom styles layered on top of Bootstrap 5.
+   Color palette:
+     Navy background : #0A1628
+     High risk       : #E63946  (red)
+     Medium risk     : #F4A261  (orange)
+     Low risk        : #2A9D8F  (teal)
+     Accent blue     : #4A90D9
+────────────────────────────────────────────────────────────────────────────── */
+
+/* ── Root / Global ─────────────────────────────────────────────────────────── */
+:root {
+  --navy:      #0A1628;
+  --navy-mid:  #112240;
+  --navy-light:#1D3461;
+  --high:      #E63946;
+  --medium:    #F4A261;
+  --low:       #2A9D8F;
+  --accent:    #4A90D9;
+  --text:      #E8EAED;
+  --muted:     #8892A4;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--navy);
+  color: var(--text);
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  font-size: 14px;
+  height: 100vh;
+  overflow: hidden; /* Prevent outer scroll — inner panels scroll */
+}
+
+/* ── Header ────────────────────────────────────────────────────────────────── */
+#header {
+  background: linear-gradient(90deg, var(--navy-mid) 0%, #0D1F40 100%);
+  border-bottom: 1px solid var(--navy-light);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+}
+
+#header .logo {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#header .logo span.dot {
+  color: var(--accent);
+}
+
+#header .subtitle {
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+}
+
+/* ── Main Layout ───────────────────────────────────────────────────────────── */
+#main-layout {
+  display: flex;
+  height: calc(100vh - 56px - 72px); /* minus header and stats bar */
+  overflow: hidden;
+}
+
+/* ── Left Sidebar ──────────────────────────────────────────────────────────── */
+#sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  background: var(--navy-mid);
+  border-right: 1px solid var(--navy-light);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#sidebar h6 {
+  padding: 14px 16px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--navy-light);
+  flex-shrink: 0;
+}
+
+#leaderboard-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 8px;
+}
+
+/* Each account card in the leaderboard */
+.account-card {
+  background: var(--navy);
+  border: 1px solid var(--navy-light);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, transform 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.account-card:hover {
+  border-color: var(--accent);
+  background: var(--navy-light);
+  transform: translateX(3px);
+}
+
+.account-card.active {
+  border-color: var(--accent);
+  background: #1a2e4a;
+}
+
+/* Colored circle showing risk level */
+.risk-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.risk-badge.High   { background: rgba(230,57,70,0.2);   color: var(--high); }
+.risk-badge.Medium { background: rgba(244,162,97,0.2); color: var(--medium); }
+.risk-badge.Low    { background: rgba(42,157,143,0.2); color: var(--low); }
+
+.account-info .acc-id {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.account-info .acc-level {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* ── Main Content Panel ────────────────────────────────────────────────────── */
+#content-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 16px;
+  gap: 16px;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.panel-header h5 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ── Graph Container ───────────────────────────────────────────────────────── */
+#graph-container {
+  flex: 1;
+  background: var(--navy-mid);
+  border: 1px solid var(--navy-light);
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  min-height: 0; /* Needed for flex children to shrink */
+}
+
+#graph-container iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+}
+
+/* Loading overlay shown while graph generates */
+#graph-loading {
+  position: absolute;
+  inset: 0;
+  background: rgba(10,22,40,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  font-size: 14px;
+  color: var(--muted);
+  gap: 10px;
+  pointer-events: none;
+}
+
+/* ── Transaction Detail Panel ──────────────────────────────────────────────── */
+#detail-panel {
+  height: 200px;
+  flex-shrink: 0;
+  background: var(--navy-mid);
+  border: 1px solid var(--navy-light);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+#detail-panel.hidden { display: none; }
+
+#detail-header {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--navy-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+#detail-header h6 {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+  margin: 0;
+}
+
+#detail-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+#detail-close:hover { color: var(--text); }
+
+#detail-body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 8px 16px;
+}
+
+/* Transaction table inside detail panel */
+.txn-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.txn-table th {
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--navy-light);
+  position: sticky;
+  top: 0;
+  background: var(--navy-mid);
+}
+
+.txn-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: var(--text);
+}
+
+.txn-table tr:hover td { background: rgba(255,255,255,0.03); }
+
+.amount-cell { color: var(--accent); font-weight: 600; }
+
+/* ── Stats Bar ─────────────────────────────────────────────────────────────── */
+#stats-bar {
+  height: 72px;
+  background: var(--navy-mid);
+  border-top: 1px solid var(--navy-light);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+.stat-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid var(--navy-light);
+  height: 100%;
+  padding: 8px;
+}
+
+.stat-card:last-child { border-right: none; }
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+  color: #FFFFFF;
+}
+
+.stat-label {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-top: 4px;
+}
+
+/* Colored values for risk counts */
+.stat-value.high   { color: var(--high); }
+.stat-value.medium { color: var(--medium); }
+
+/* ── Upload Button ─────────────────────────────────────────────────────────── */
+#upload-btn {
+  background: var(--navy-light);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 8px;
+  padding: 7px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#upload-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Hidden real file input */
+#csv-file-input { display: none; }
+
+/* ── Risk Flag Chips ───────────────────────────────────────────────────────── */
+.flag-chip {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  margin: 3px 4px 3px 0;
+  font-weight: 500;
+}
+
+.flag-chip.High   { background: rgba(230,57,70,0.15);   color: var(--high); }
+.flag-chip.Medium { background: rgba(244,162,97,0.15);  color: var(--medium); }
+.flag-chip.Low    { background: rgba(42,157,143,0.15);  color: var(--low); }
+
+/* ── Scrollbar Styling ─────────────────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 6px; height: 6px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: var(--navy-light); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* ── Error Banner ──────────────────────────────────────────────────────────── */
+#error-banner {
+  background: rgba(230,57,70,0.15);
+  border: 1px solid var(--high);
+  color: var(--high);
+  padding: 12px 20px;
+  border-radius: 8px;
+  margin: 16px;
+  font-size: 13px;
+}
+
+/* ── Toast notification ────────────────────────────────────────────────────── */
+#toast {
+  position: fixed;
+  bottom: 90px;
+  right: 20px;
+  background: var(--navy-light);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+#toast.show { opacity: 1; }
+
+/* ── Responsive tweaks ─────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  #sidebar { width: 220px; }
+  body { overflow: auto; }
+  #main-layout { height: auto; flex-direction: column; }
+  #sidebar { width: 100%; height: 220px; }
+}

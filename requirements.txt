@@ -1,0 +1,7 @@
+# Python packages required to run FundTrace
+# Install all at once with: pip install -r requirements.txt
+
+flask>=3.0.0          # Web framework — serves the dashboard and API routes
+pandas>=2.0.0         # Data loading and manipulation (CSV → DataFrame)
+networkx>=3.0         # Graph construction and cycle detection
+pyvis>=0.3.2          # Interactive graph visualization (generates Pyvis HTML)

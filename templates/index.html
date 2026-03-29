@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<!--
+  index.html — FundTrace Main Dashboard
+  Single-page app using Bootstrap 5 (CDN) + vanilla JS.
+  No frameworks. All interactivity is plain JavaScript.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FundTrace — Bank Fund Flow Intelligence</title>
+  <meta name="description" content="Interactive fraud detection dashboard for tracking fund flows within a bank using graph analysis." />
+
+  <!-- Bootstrap 5 from CDN (layout + utilities) -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <!-- Google Font: Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <!-- Our custom stylesheet -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════
+     HEADER
+══════════════════════════════════════════════════ -->
+<div id="header">
+  <div class="logo">
+    <!-- Magnifier + dollar sign emoji to evoke surveillance/finance -->
+    🔍 Fund<span class="dot">Trace</span>
+  </div>
+  <div class="subtitle">Bank Fund Flow Intelligence Dashboard &nbsp;·&nbsp; Fraud Detection Engine</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     ERROR BANNER (only shown if Flask passes an error)
+══════════════════════════════════════════════════ -->
+{% if error %}
+<div id="error-banner">
+  ⚠️  {{ error }}<br/>
+  <small>Make sure you ran: <code>python data_generator.py</code> before starting the server.</small>
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════
+     MAIN LAYOUT  (sidebar + content)
+══════════════════════════════════════════════════ -->
+<div id="main-layout">
+
+  <!-- ── LEFT SIDEBAR: Risk Leaderboard ───────────────────────── -->
+  <div id="sidebar">
+    <h6>⚠ Risk Leaderboard</h6>
+    <div id="leaderboard-list">
+      <!-- Cards are injected here by JS via /api/risk-leaderboard -->
+      <div style="color: var(--muted); font-size: 12px; padding: 12px;">Loading...</div>
+    </div>
+  </div>
+
+  <!-- ── RIGHT: Graph + Detail Panel ──────────────────────────── -->
+  <div id="content-panel">
+
+    <!-- Panel header with upload button -->
+    <div class="panel-header">
+      <h5>📊 Transaction Flow Graph</h5>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <!-- Clicking this button triggers the hidden file input -->
+        <button id="upload-btn" onclick="document.getElementById('csv-file-input').click()">
+          ⬆ Upload CSV
+        </button>
+        <!-- Real file input — hidden, triggered by the button above -->
+        <input type="file" id="csv-file-input" accept=".csv" onchange="handleUpload(this)" />
+      </div>
+    </div>
+
+    <!-- Graph iframe container -->
+    <div id="graph-container">
+      <!-- Loading spinner shown until iframe loads -->
+      <div id="graph-loading">
+        <span>🔄</span> Rendering graph...
+      </div>
+
+      <!--
+        The Pyvis HTML is written to /api/graph-html and served as a standalone page.
+        We use an iframe so Pyvis's vis.js canvas doesn't conflict with our page JS.
+      -->
+      {% if not error %}
+      <iframe
+        id="graph-iframe"
+        src="/api/graph-html"
+        onload="document.getElementById('graph-loading').style.display='none';"
+        title="Fund Flow Graph"
+      ></iframe>
+      {% endif %}
+    </div>
+
+    <!-- Account detail panel — hidden until user clicks a leaderboard card -->
+    <div id="detail-panel" class="hidden">
+      <div id="detail-header">
+        <h6 id="detail-title">Account Detail</h6>
+        <button id="detail-close" onclick="closeDetail()" title="Close">✕</button>
+      </div>
+      <div id="detail-body">
+        <!-- Populated by JS when an account is selected -->
+      </div>
+    </div>
+
+  </div><!-- /content-panel -->
+</div><!-- /main-layout -->
+
+<!-- ══════════════════════════════════════════════════
+     BOTTOM STATS BAR
+══════════════════════════════════════════════════ -->
+<div id="stats-bar">
+  <div class="stat-card">
+    <div class="stat-value" id="stat-accounts">{{ stats.total_accounts or '—' }}</div>
+    <div class="stat-label">Total Accounts</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" id="stat-txns">{{ stats.total_transactions or '—' }}</div>
+    <div class="stat-label">Transactions</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value high" id="stat-high">{{ stats.high_risk_count or '0' }}</div>
+    <div class="stat-label">High Risk</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value medium" id="stat-medium">{{ stats.medium_risk_count or '0' }}</div>
+    <div class="stat-label">Medium Risk</div>
+  </div>
+</div>
+
+<!-- ── Toast notification ────────────────────────────────── -->
+<div id="toast"></div>
+
+<!-- ══════════════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════════════ -->
+<script>
+// ── Utility: Show a brief toast message ──────────────────────────────────────
+function showToast(message, durationMs = 3000) {
+  const toast = document.getElementById("toast");
+  toast.textContent = message;
+  toast.classList.add("show");
+  setTimeout(() => toast.classList.remove("show"), durationMs);
+}
+
+// ── Load Leaderboard ─────────────────────────────────────────────────────────
+// Fetches top 10 risky accounts and renders them as clickable cards in the sidebar.
+async function loadLeaderboard() {
+  const list = document.getElementById("leaderboard-list");
+  try {
+    const res  = await fetch("/api/risk-leaderboard");
+    const data = await res.json();
+
+    if (!data.length) {
+      list.innerHTML = '<div style="color:var(--muted);padding:12px;font-size:12px;">No data available</div>';
+      return;
+    }
+
+    // Only show top 10 in the sidebar
+    const top10 = data.slice(0, 10);
+    list.innerHTML = top10.map(account => `
+      <div class="account-card" id="card-${account.account_id}"
+           onclick="selectAccount('${account.account_id}', this)">
+        <div class="risk-badge ${account.risk_level}">${account.score}</div>
+        <div class="account-info">
+          <div class="acc-id">${account.account_id}</div>
+          <div class="acc-level">${account.risk_level} Risk
+            ${account.reasons.length ? '· ' + account.reasons.length + ' flag(s)' : ''}
+          </div>
+        </div>
+      </div>
+    `).join("");
+
+  } catch (e) {
+    list.innerHTML = '<div style="color:var(--high);padding:12px;font-size:12px;">Failed to load leaderboard</div>';
+    console.error("Leaderboard load error:", e);
+  }
+}
+
+// ── Select an Account ────────────────────────────────────────────────────────
+// Called when a leaderboard card is clicked.
+// Marks the card active and fetches that account's transaction history.
+async function selectAccount(accountId, cardEl) {
+  // ① Highlight clicked card and un-highlight others
+  document.querySelectorAll(".account-card").forEach(c => c.classList.remove("active"));
+  if (cardEl) cardEl.classList.add("active");
+
+  // ② Show and populate the detail panel
+  const panel = document.getElementById("detail-panel");
+  const body  = document.getElementById("detail-body");
+  const title = document.getElementById("detail-title");
+
+  panel.classList.remove("hidden");
+  title.textContent = `Account: ${accountId}`;
+  body.innerHTML = '<div style="color:var(--muted);padding:8px;">Loading transactions...</div>';
+
+  try {
+    const res  = await fetch(`/account/${accountId}`);
+    const data = await res.json();
+
+    if (data.error) {
+      body.innerHTML = `<div style="color:var(--high);padding:8px;">${data.error}</div>`;
+      return;
+    }
+
+    // ③ Build the risk flag chips
+    const riskHtml = data.risk.reasons.length
+      ? data.risk.reasons.map(r => `<span class="flag-chip ${data.risk.risk_level}">${r}</span>`).join(" ")
+      : `<span class="flag-chip Low">✅ No fraud signals detected</span>`;
+
+    // ④ Combine sent + received into one table, sorted by timestamp
+    const allTxns = [
+      ...data.sent.map(t     => ({ ...t, direction: "⬆ Sent" })),
+      ...data.received.map(t => ({ ...t, direction: "⬇ Received" })),
+    ].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    const rows = allTxns.map(t => `
+      <tr>
+        <td>${t.transaction_id}</td>
+        <td>${t.direction}</td>
+        <td>${t.direction.includes("Sent") ? t.receiver_id : t.sender_id}</td>
+        <td class="amount-cell">₹${Number(t.amount).toLocaleString('en-IN', {maximumFractionDigits:0})}</td>
+        <td>${t.timestamp}</td>
+        <td>${t.channel}</td>
+        <td>${t.branch}</td>
+      </tr>
+    `).join("");
+
+    body.innerHTML = `
+      <div style="padding:8px 0 6px;">
+        <strong style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Risk Flags</strong><br>
+        <div style="margin-top:4px;">${riskHtml}</div>
+        <div style="margin-top:6px;font-size:12px;color:var(--muted);">
+          Total Sent: <strong style="color:var(--high)">₹${Number(data.total_sent).toLocaleString('en-IN',{maximumFractionDigits:0})}</strong>
+          &nbsp;|&nbsp;
+          Total Received: <strong style="color:var(--low)">₹${Number(data.total_received).toLocaleString('en-IN',{maximumFractionDigits:0})}</strong>
+          &nbsp;|&nbsp;
+          ${allTxns.length} transaction(s)
+        </div>
+      </div>
+      <table class="txn-table">
+        <thead>
+          <tr>
+            <th>TXN ID</th><th>Dir</th><th>Counterparty</th>
+            <th>Amount</th><th>Timestamp</th><th>Channel</th><th>Branch</th>
+          </tr>
+        </thead>
+        <tbody>${rows || '<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:10px;">No transactions found</td></tr>'}</tbody>
+      </table>
+    `;
+
+  } catch (e) {
+    body.innerHTML = `<div style="color:var(--high);padding:8px;">Error fetching details: ${e}</div>`;
+  }
+}
+
+// ── Close Detail Panel ───────────────────────────────────────────────────────
+function closeDetail() {
+  document.getElementById("detail-panel").classList.add("hidden");
+  document.querySelectorAll(".account-card").forEach(c => c.classList.remove("active"));
+}
+
+// ── Handle CSV Upload ────────────────────────────────────────────────────────
+// Posts the selected CSV to /upload, then reloads the graph iframe and stats.
+async function handleUpload(input) {
+  if (!input.files.length) return;
+
+  const file = input.files[0];
+  showToast(`⏳ Processing ${file.name}...`, 10000);
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  try {
+    const res  = await fetch("/upload", { method: "POST", body: formData });
+    const data = await res.json();
+
+    if (data.error) {
+      showToast(`❌ ${data.error}`);
+      return;
+    }
+
+    // Update stats bar without a full reload
+    document.getElementById("stat-accounts").textContent = data.total_accounts;
+    document.getElementById("stat-txns").textContent     = data.total_transactions;
+    document.getElementById("stat-high").textContent     = data.high_risk_count;
+    document.getElementById("stat-medium").textContent   = data.medium_risk_count;
+
+    // Reload leaderboard and graph
+    await loadLeaderboard();
+
+    // Force the iframe to reload the new graph
+    const iframe = document.getElementById("graph-iframe");
+    if (iframe) {
+      document.getElementById("graph-loading").style.display = "flex";
+      iframe.src = "/api/graph-html?" + Date.now(); // cache-bust
+    }
+
+    closeDetail();
+    showToast(`✅ Loaded ${data.total_transactions} transactions from ${file.name}`);
+
+  } catch (e) {
+    showToast("❌ Upload failed. Please try again.");
+    console.error("Upload error:", e);
+  }
+
+  // Reset file input so the same file can be re-selected
+  input.value = "";
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+// Run once when the page first loads.
+document.addEventListener("DOMContentLoaded", () => {
+  loadLeaderboard();
+
+  // Hook iframe load to hide the loading overlay
+  const iframe = document.getElementById("graph-iframe");
+  if (iframe) {
+    iframe.addEventListener("load", () => {
+      document.getElementById("graph-loading").style.display = "none";
+    });
+  }
+});
+</script>
+
+</body>
+</html>
