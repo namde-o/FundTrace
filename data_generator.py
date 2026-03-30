@@ -24,7 +24,7 @@ BRANCHES = ["Mumbai", "Delhi", "Pune", "Chennai", "Hyderabad"]
 
 # Base reference time — "now" for the simulation
 NOW = datetime(2026, 3, 29, 22, 53, 3)  # Matches current local time
-START_DATE = NOW - timedelta(days=90)   # Transactions cover last 90 days
+START_DATE = NOW - timedelta(days=90)      # 90-day window for transactions
 
 
 def random_timestamp(start=START_DATE, end=NOW):
