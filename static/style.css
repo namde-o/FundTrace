@@ -1,15 +1,4 @@
-/* ──────────────────────────────────────────────────────────────────────────────
-   style.css — FundTrace Dashboard
-   Custom styles layered on top of Bootstrap 5.
-   Color palette:
-     Navy background : #0A1628
-     High risk       : #E63946  (red)
-     Medium risk     : #F4A261  (orange)
-     Low risk        : #2A9D8F  (teal)
-     Accent blue     : #4A90D9
-────────────────────────────────────────────────────────────────────────────── */
 
-/* ── Root / Global ─────────────────────────────────────────────────────────── */
 :root {
   --navy:      #0A1628;
   --navy-mid:  #112240;
@@ -34,10 +23,8 @@ body {
   font-family: 'Inter', 'Segoe UI', sans-serif;
   font-size: 14px;
   height: 100vh;
-  overflow: hidden; /* Prevent outer scroll — inner panels scroll */
-}
+  overflow: hidden; 
 
-/* ── Header ────────────────────────────────────────────────────────────────── */
 #header {
   background: linear-gradient(90deg, var(--navy-mid) 0%, #0D1F40 100%);
   border-bottom: 1px solid var(--navy-light);
@@ -68,15 +55,14 @@ body {
   color: var(--muted);
   letter-spacing: 0.5px;
 }
+}
 
-/* ── Main Layout ───────────────────────────────────────────────────────────── */
 #main-layout {
   display: flex;
   height: calc(100vh - 56px - 72px); /* minus header and stats bar */
   overflow: hidden;
 }
 
-/* ── Left Sidebar ──────────────────────────────────────────────────────────── */
 #sidebar {
   width: 280px;
   flex-shrink: 0;
@@ -104,7 +90,7 @@ body {
   padding: 8px;
 }
 
-/* Each account card in the leaderboard */
+
 .account-card {
   background: var(--navy);
   border: 1px solid var(--navy-light);
@@ -129,7 +115,7 @@ body {
   background: #1a2e4a;
 }
 
-/* Colored circle showing risk level */
+
 .risk-badge {
   width: 36px;
   height: 36px;
@@ -158,7 +144,7 @@ body {
   margin-top: 2px;
 }
 
-/* ── Main Content Panel ────────────────────────────────────────────────────── */
+
 #content-panel {
   flex: 1;
   display: flex;
@@ -181,7 +167,7 @@ body {
   color: var(--text);
 }
 
-/* ── Graph Container ───────────────────────────────────────────────────────── */
+
 #graph-container {
   flex: 1;
   background: var(--navy-mid);
@@ -189,7 +175,7 @@ body {
   border-radius: 12px;
   overflow: hidden;
   position: relative;
-  min-height: 0; /* Needed for flex children to shrink */
+  min-height: 0; 
 }
 
 #graph-container iframe {
@@ -199,7 +185,7 @@ body {
   background: transparent;
 }
 
-/* Loading overlay shown while graph generates */
+
 #graph-loading {
   position: absolute;
   inset: 0;
@@ -214,7 +200,7 @@ body {
   pointer-events: none;
 }
 
-/* ── Transaction Detail Panel ──────────────────────────────────────────────── */
+
 #detail-panel {
   height: 200px;
   flex-shrink: 0;
@@ -265,7 +251,7 @@ body {
   padding: 8px 16px;
 }
 
-/* Transaction table inside detail panel */
+
 .txn-table {
   width: 100%;
   border-collapse: collapse;
@@ -296,7 +282,7 @@ body {
 
 .amount-cell { color: var(--accent); font-weight: 600; }
 
-/* ── Stats Bar ─────────────────────────────────────────────────────────────── */
+
 #stats-bar {
   height: 72px;
   background: var(--navy-mid);
@@ -336,11 +322,11 @@ body {
   margin-top: 4px;
 }
 
-/* Colored values for risk counts */
+
 .stat-value.high   { color: var(--high); }
 .stat-value.medium { color: var(--medium); }
 
-/* ── Upload Button ─────────────────────────────────────────────────────────── */
+
 #upload-btn {
   background: var(--navy-light);
   border: 1px solid var(--accent);
@@ -361,10 +347,10 @@ body {
   color: #fff;
 }
 
-/* Hidden real file input */
+
 #csv-file-input { display: none; }
 
-/* ── Risk Flag Chips ───────────────────────────────────────────────────────── */
+
 .flag-chip {
   display: inline-block;
   padding: 3px 10px;
@@ -378,13 +364,13 @@ body {
 .flag-chip.Medium { background: rgba(244,162,97,0.15);  color: var(--medium); }
 .flag-chip.Low    { background: rgba(42,157,143,0.15);  color: var(--low); }
 
-/* ── Scrollbar Styling ─────────────────────────────────────────────────────── */
+
 ::-webkit-scrollbar        { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track  { background: transparent; }
 ::-webkit-scrollbar-thumb  { background: var(--navy-light); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
-/* ── Error Banner ──────────────────────────────────────────────────────────── */
+
 #error-banner {
   background: rgba(230,57,70,0.15);
   border: 1px solid var(--high);
@@ -395,7 +381,7 @@ body {
   font-size: 13px;
 }
 
-/* ── Toast notification ────────────────────────────────────────────────────── */
+
 #toast {
   position: fixed;
   bottom: 90px;
@@ -414,7 +400,7 @@ body {
 
 #toast.show { opacity: 1; }
 
-/* ── Responsive tweaks ─────────────────────────────────────────────────────── */
+
 @media (max-width: 900px) {
   #sidebar { width: 220px; }
   body { overflow: auto; }
