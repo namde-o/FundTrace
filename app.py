@@ -22,7 +22,7 @@ from graph_engine import (
 
 app = Flask(__name__)
 
-# ── Global State ───────────────────────────────────────────────────────────────
+# ── Global State 
 # We keep the processed data in module-level variables so all routes can
 # access them without re-reading the CSV on every request.
 
@@ -68,7 +68,7 @@ def load_and_process(filepath):
     return None  # No error
 
 
-# ── Load default CSV on startup ────────────────────────────────────────────────
+# ── Load default CSV on startup 
 DEFAULT_CSV = os.path.join(os.path.dirname(__file__), "transactions.csv")
 _startup_error = None
 
@@ -81,7 +81,7 @@ else:
     )
 
 
-# ── Routes ─────────────────────────────────────────────────────────────────────
+# ── Routes 
 
 @app.route("/")
 def index():
@@ -210,7 +210,7 @@ def graph_html_route():
     return _graph_html, 200, {"Content-Type": "text/html"}
 
 
-# ── Run ────────────────────────────────────────────────────────────────────────
+# ── Run 
 if __name__ == "__main__":
     print("🚀 Starting FundTrace...")
     print(f"   Data loaded: {'✅ Yes' if _df is not None else '❌ No - run data_generator.py first'}")

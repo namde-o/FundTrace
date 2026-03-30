@@ -13,7 +13,7 @@ import pandas as pd
 import random
 from datetime import datetime, timedelta
 
-# ── Configuration ──────────────────────────────────────────────────────────────
+# ── Configuration 
 random.seed(42)  # Fixed seed for reproducible results
 
 # All 60 account IDs
@@ -47,7 +47,7 @@ def make_txn(tx_id, sender, receiver, amount, timestamp=None, channel=None, bran
     }
 
 
-# ── Fraud Pattern Generators ───────────────────────────────────────────────────
+# ── Fraud Pattern Generators 
 
 def generate_circular_pattern(start_id):
     """
@@ -135,7 +135,7 @@ def generate_hub_pattern(start_id):
     return txns
 
 
-# ── Main Generator ─────────────────────────────────────────────────────────────
+# ── Main Generator 
 
 def generate_transactions():
     """
@@ -173,7 +173,7 @@ def generate_transactions():
     return txns
 
 
-# ── Entry Point ────────────────────────────────────────────────────────────────
+# ── Entry Point 
 
 if __name__ == "__main__":
     print("Generating synthetic transactions...")

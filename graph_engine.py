@@ -14,8 +14,7 @@ import networkx as nx
 from datetime import timedelta
 
 
-# ── Graph Construction ─────────────────────────────────────────────────────────
-
+# ── Graph Construction 
 def build_graph(df):
     """
     Build a directed graph where:
@@ -45,7 +44,7 @@ def build_graph(df):
     return G
 
 
-# ── Fraud Detection Functions ──────────────────────────────────────────────────
+# ── Fraud Detection Functions 
 
 def detect_cycles(graph, max_cycles=100):
     """
@@ -174,7 +173,7 @@ def detect_hubs(graph):
     return [node for node, in_deg in graph.in_degree() if in_deg >= 8]
 
 
-# ── Risk Scoring ───────────────────────────────────────────────────────────────
+# ── Risk Scoring 
 
 def calculate_risk_scores(graph, df):
     """
@@ -248,7 +247,7 @@ def calculate_risk_scores(graph, df):
     return risk_scores
 
 
-# ── Interactive Graph Renderer ─────────────────────────────────────────────────
+# ── Interactive Graph Renderer 
 
 def build_pyvis_graph(graph, risk_scores):
     """
