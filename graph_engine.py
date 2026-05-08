@@ -331,8 +331,8 @@ def calculate_risk_scores(graph, df):
     features_df = extract_features(graph, df)
     iso_scores, rf_scores, feature_importances = train_ml_models(features_df, rule_flags_dict)
 
-    # Normalize rule score to 0-100 (assuming max realistic score is ~8)
-    max_rule = max(base_scores.values()) if base_scores.values() else 1
+    # Normalise rule score to 0-100 (assuming max realistic score is ~8)
+    max_rule = max(base_scores.values()) if base_scores else 1
     if max_rule == 0: max_rule = 1
 
     risk_scores = {}
