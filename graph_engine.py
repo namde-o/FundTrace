@@ -12,6 +12,16 @@ Handles:
 import pandas as pd
 import networkx as nx
 from datetime import timedelta
+import numpy as np
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.ensemble import IsolationForest, RandomForestClassifier
+from sklearn.preprocessing import MinMaxScaler
+import io
+import base64
+
 
 
 # ── Graph Construction 
@@ -173,76 +183,193 @@ def detect_hubs(graph):
     return [node for node, in_deg in graph.in_degree() if in_deg >= 8]
 
 
-# ── Risk Scoring 
+
+# ── ML and Feature Engineering
+
+def extract_features(graph, df):
+    """
+    Extracts node-level features for ML models.
+    """
+    features = []
+
+    # Pre-compute metrics
+    pr = nx.pagerank(graph, alpha=0.85, max_iter=100)
+    try:
+        bc = nx.betweenness_centrality(graph)
+    except:
+        bc = {node: 0.0 for node in graph.nodes()}
+
+    undirected = graph.to_undirected()
+    cc = nx.clustering(undirected)
+
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+
+    for node in graph.nodes():
+        in_deg = graph.in_degree(node)
+        out_deg = graph.out_degree(node)
+        degree_ratio = in_deg / (out_deg + 1e-5)
+
+        # Transactions involving this node
+        node_txns = df[(df['sender_id'] == node) | (df['receiver_id'] == node)]
+
+        if len(node_txns) > 0:
+            avg_tx_amount = node_txns['amount'].mean()
+            total_volume = node_txns['amount'].sum()
+
+            # Velocity and gap
+            times = node_txns['timestamp'].sort_values()
+            active_days = (times.max() - times.min()).days + 1
+            transaction_velocity = len(node_txns) / max(1, active_days)
+
+            if len(times) > 1:
+                gaps = times.diff().dt.days.dropna()
+                max_gap_days = gaps.max() if len(gaps) > 0 else 0
+            else:
+                max_gap_days = 0
+        else:
+            avg_tx_amount = 0
+            total_volume = 0
+            transaction_velocity = 0
+            max_gap_days = 0
+
+        features.append({
+            'account_id': node,
+            'in_degree': in_deg,
+            'out_degree': out_deg,
+            'degree_ratio': degree_ratio,
+            'pagerank_score': pr.get(node, 0),
+            'betweenness_centrality': bc.get(node, 0),
+            'clustering_coefficient': cc.get(node, 0),
+            'avg_transaction_amount': avg_tx_amount,
+            'transaction_velocity': transaction_velocity,
+            'max_gap_days': max_gap_days,
+            'total_volume': total_volume
+        })
+
+    return pd.DataFrame(features).set_index('account_id')
+
+def train_ml_models(features_df, rule_flags_dict):
+    """
+    Trains Isolation Forest and Random Forest.
+    Returns dictionaries of scores.
+    """
+    if features_df.empty:
+        return {}, {}, {}
+
+    # 1. Isolation Forest
+    iso_forest = IsolationForest(contamination=0.1, random_state=42)
+    iso_scores_raw = iso_forest.fit_predict(features_df)
+    # Convert anomaly (-1) and normal (1) to anomaly probability (0 to 1)
+    # Using decision_function: lower is more anomalous
+    decision_scores = iso_forest.decision_function(features_df)
+
+    # Scale to 0-100 where 100 is most anomalous
+    scaler = MinMaxScaler(feature_range=(0, 100))
+    iso_scores_scaled = 100 - scaler.fit_transform(decision_scores.reshape(-1, 1)).flatten()
+
+    iso_dict = {acc: score for acc, score in zip(features_df.index, iso_scores_scaled)}
+
+    # 2. Random Forest
+    # Labels based on rule flags
+    labels = [1 if rule_flags_dict.get(acc, False) else 0 for acc in features_df.index]
+
+    rf_dict = {}
+    feature_importances = {}
+
+    if sum(labels) > 0 and sum(labels) < len(labels):
+        rf = RandomForestClassifier(n_estimators=100, random_state=42)
+        rf.fit(features_df, labels)
+        rf_probs = rf.predict_proba(features_df)[:, 1] * 100
+        rf_dict = {acc: prob for acc, prob in zip(features_df.index, rf_probs)}
+
+        feature_importances = dict(zip(features_df.columns, rf.feature_importances_))
+    else:
+        # If all 0 or all 1, fallback
+        rf_dict = {acc: 0.0 for acc in features_df.index}
+        feature_importances = {col: 1.0/len(features_df.columns) for col in features_df.columns}
+
+    return iso_dict, rf_dict, feature_importances
+
+# ── Risk Scoring
 
 def calculate_risk_scores(graph, df):
-    """
-    Aggregates all fraud signals and assigns a numeric risk score to every account.
-
-    Scoring:
-      +3 — involved in a circular money flow
-      +2 — flagged for structuring
-      +2 — flagged as dormant-then-active
-      +1 — flagged as a hub account
-
-    Risk levels:
-      Low    = score 0–2
-      Medium = score 3–4
-      High   = score 5+
-
-    Args:
-        graph (nx.DiGraph): The transaction graph
-        df    (pd.DataFrame): The transactions dataframe
-
-    Returns:
-        dict: {account_id: {"score": int, "reasons": [str], "risk_level": str}}
-    """
     # Run all 4 detectors
     cycles        = detect_cycles(graph)
     structuring   = detect_structuring(df)
     dormant       = detect_dormant_accounts(df)
     hubs          = detect_hubs(graph)
 
-    # Flatten cycle lists into a set of account IDs involved in any cycle
     cycle_accounts = set(acc for cycle in cycles for acc in cycle)
-
-    # Build a score dict for every node in the graph
-    risk_scores = {}
     all_accounts = list(graph.nodes())
 
+    # Step 1: Rule-based base scores and flags
+    rule_flags_dict = {}
+    base_scores = {}
+    reasons_dict = {}
+
     for account in all_accounts:
-        score   = 0
+        score = 0
         reasons = []
-
         if account in cycle_accounts:
-            score   += 3
+            score += 3
             reasons.append("Involved in circular fund flow (cycle detected)")
-
         if account in structuring:
-            score   += 2
+            score += 2
             reasons.append("Structuring suspected: multiple sub-threshold transactions in 24h")
-
         if account in dormant:
-            score   += 2
+            score += 2
             reasons.append("Dormant account suddenly activated with large transactions")
-
         if account in hubs:
-            score   += 1
+            score += 1
             reasons.append("Hub account: receives funds from many different sources")
 
-        # Determine risk level from numeric score
-        if score >= 5:
+        base_scores[account] = score
+        reasons_dict[account] = reasons
+        rule_flags_dict[account] = score > 0
+
+    # Step 2: Extract features and run ML models
+    features_df = extract_features(graph, df)
+    iso_scores, rf_scores, feature_importances = train_ml_models(features_df, rule_flags_dict)
+
+    # Normalize rule score to 0-100 (assuming max realistic score is ~8)
+    max_rule = max(base_scores.values()) if base_scores.values() else 1
+    if max_rule == 0: max_rule = 1
+
+    risk_scores = {}
+
+    for account in all_accounts:
+        rule_score_normalized = min(100, (base_scores[account] / max_rule) * 100)
+        iso_s = iso_scores.get(account, 0)
+        rf_s = rf_scores.get(account, 0)
+
+        # Combined Risk Score
+        final_score = (0.40 * rule_score_normalized) + (0.35 * iso_s) + (0.25 * rf_s)
+        final_score = int(round(final_score))
+
+        if final_score >= 67:
             risk_level = "High"
-        elif score >= 3:
+        elif final_score >= 34:
             risk_level = "Medium"
         else:
             risk_level = "Low"
 
+        # Get feature dict for this account
+        f_dict = features_df.loc[account].to_dict() if account in features_df.index else {}
+
         risk_scores[account] = {
-            "score":      score,
-            "reasons":    reasons,
+            "score":      final_score,
+            "rule_score": int(round(rule_score_normalized)),
+            "iso_score":  int(round(iso_s)),
+            "rf_score":   int(round(rf_s)),
+            "reasons":    reasons_dict[account],
             "risk_level": risk_level,
+            "features":   f_dict
         }
+
+    # Attach feature importances to the risk_scores dict (hacky but passes data along)
+    risk_scores["_metadata"] = {
+        "feature_importances": feature_importances
+    }
 
     return risk_scores
 
@@ -282,7 +409,8 @@ def build_pyvis_graph(graph, risk_scores):
     for node in graph.nodes():
         info       = risk_scores.get(node, {"score": 0, "risk_level": "Low", "reasons": []})
         color      = COLOR_MAP[info["risk_level"]]
-        size       = max(20, 20 + info["score"] * 10)
+        # Size scaling for 0-100 score: min 20, max 60
+        size       = 20 + (info["score"] / 100) * 40
         reasons_txt = "&#10;".join(info["reasons"]) if info["reasons"] else "No fraud signals"
         tooltip    = (
             f"Account: {node}&#10;"
@@ -362,8 +490,187 @@ var options = {{
   nodes: {{ shape: "dot" }},
   edges: {{ font: {{ size: 0 }}, selectionWidth: 2 }}
 }};
-new vis.Network(container, {{ nodes: nodes, edges: edges }}, options);
+var network = new vis.Network(container, {{ nodes: nodes, edges: edges }}, options);
+
+// Listen for messages from parent window
+window.addEventListener('message', function(event) {{
+    var data = event.data;
+    if (data.action === 'filter') {{
+        var filteredNodes = nodes.get().filter(function(node) {{
+            if (data.type === 'All') return true;
+            if (data.type === 'High' && node.title.includes('Risk Level: High')) return true;
+            if (data.type === 'Medium' && node.title.includes('Risk Level: Medium')) return true;
+            if (data.type === 'Cycles' && node.title.includes('cycle detected')) return true;
+            if (data.type === 'Hubs' && node.title.includes('Hub account')) return true;
+            return false;
+        }});
+
+        var filteredNodeIds = filteredNodes.map(function(n) {{ return n.id; }});
+        var filteredEdges = edges.get().filter(function(edge) {{
+            return filteredNodeIds.includes(edge.from) && filteredNodeIds.includes(edge.to);
+        }});
+
+        network.setData({{
+            nodes: filteredNodes,
+            edges: filteredEdges
+        }});
+    }}
+    else if (data.action === 'search') {{
+        var searchId = data.value.trim().toUpperCase();
+        var node = nodes.get(searchId);
+        if (node) {{
+            network.selectNodes([searchId]);
+            network.focus(searchId, {{
+                scale: 1.5,
+                animation: {{ duration: 1000, easingFunction: 'easeInOutQuad' }}
+            }});
+        }} else {{
+            network.unselectAll();
+            network.fit({{ animation: {{ duration: 1000 }} }});
+        }}
+    }}
+    else if (data.action === 'snapshot') {{
+        var canvas = document.querySelector('canvas');
+        var url = canvas.toDataURL();
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'graph_snapshot.png';
+        a.click();
+    }}
+    else if (data.action === 'resetZoom') {{
+        network.fit({{ animation: {{ duration: 1000, easingFunction: 'easeInOutQuad' }} }});
+    }}
+    else if (data.action === 'zoomIn') {{
+        var scale = network.getScale() * 1.5;
+        network.moveTo({{ scale: scale, animation: {{ duration: 500 }} }});
+    }}
+    else if (data.action === 'zoomOut') {{
+        var scale = network.getScale() / 1.5;
+        network.moveTo({{ scale: scale, animation: {{ duration: 500 }} }});
+    }}
+}});
+
 </script>
 </body>
 </html>"""
     return html
+
+
+# ── Analytics Chart Generation
+
+def generate_analytics_charts(df, risk_scores):
+    charts = {}
+
+    # 1. Transaction amount distribution (histogram)
+    plt.figure(figsize=(8, 4))
+    sns.histplot(df['amount'], bins=50, color='#4A90D9', log_scale=True)
+    plt.title('Transaction Amount Distribution (Log Scale)')
+    plt.xlabel('Amount (₹)')
+    plt.ylabel('Count')
+    plt.tight_layout()
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+    buf.seek(0)
+    charts['amount_dist'] = base64.b64encode(buf.read()).decode('utf-8')
+    plt.close()
+
+    # 2. Fraud pattern breakdown
+    patterns = {'Circular': 0, 'Structuring': 0, 'Dormant': 0, 'Hub': 0}
+    for acc, info in risk_scores.items():
+        if acc == "_metadata": continue
+        for r in info.get('reasons', []):
+            if 'circular' in r.lower(): patterns['Circular'] += 1
+            if 'structuring' in r.lower(): patterns['Structuring'] += 1
+            if 'dormant' in r.lower(): patterns['Dormant'] += 1
+            if 'hub' in r.lower(): patterns['Hub'] += 1
+
+    plt.figure(figsize=(8, 4))
+    sns.barplot(x=list(patterns.keys()), y=list(patterns.values()), palette='rocket')
+    plt.title('Fraud Patterns Detected (Accounts Triggered)')
+    plt.tight_layout()
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+    buf.seek(0)
+    charts['fraud_patterns'] = base64.b64encode(buf.read()).decode('utf-8')
+    plt.close()
+
+    # 3. Transaction volume over time
+    df['date'] = pd.to_datetime(df['timestamp']).dt.date
+    daily_vol = df.groupby('date')['amount'].sum().reset_index()
+    plt.figure(figsize=(10, 4))
+    sns.lineplot(data=daily_vol, x='date', y='amount', color='#2A9D8F', linewidth=2)
+    plt.title('Transaction Volume Over Time')
+    plt.xlabel('Date')
+    plt.ylabel('Total Volume (₹)')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+    buf.seek(0)
+    charts['volume_time'] = base64.b64encode(buf.read()).decode('utf-8')
+    plt.close()
+
+    # 4. Correlation heatmap
+    features_list = [v['features'] for k, v in risk_scores.items() if k != "_metadata" and 'features' in v and v['features']]
+    if features_list:
+        fdf = pd.DataFrame(features_list)
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(fdf.corr(), annot=False, cmap='coolwarm', center=0)
+        plt.title('Graph Features Correlation Heatmap')
+        plt.tight_layout()
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+        buf.seek(0)
+        charts['correlation'] = base64.b64encode(buf.read()).decode('utf-8')
+        plt.close()
+    else:
+        charts['correlation'] = ""
+
+    # 5. Top 10 riskiest accounts
+    sorted_accs = sorted([(k, v['score']) for k, v in risk_scores.items() if k != "_metadata"], key=lambda x: x[1], reverse=True)[:10]
+    plt.figure(figsize=(8, 4))
+    sns.barplot(x=[x[1] for x in sorted_accs], y=[x[0] for x in sorted_accs], palette='Reds_r')
+    plt.title('Top 10 Riskiest Accounts')
+    plt.xlabel('Risk Score')
+    plt.tight_layout()
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+    buf.seek(0)
+    charts['top_risky'] = base64.b64encode(buf.read()).decode('utf-8')
+    plt.close()
+
+    # 6. Feature importances
+    metadata = risk_scores.get("_metadata", {})
+    importances = metadata.get("feature_importances", {})
+    if importances:
+        s_imp = sorted(importances.items(), key=lambda x: x[1], reverse=True)
+        plt.figure(figsize=(8, 4))
+        sns.barplot(x=[x[1] for x in s_imp], y=[x[0] for x in s_imp], palette='viridis')
+        plt.title('Which signals matter most for fraud detection?')
+        plt.xlabel('Importance')
+        plt.tight_layout()
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+        buf.seek(0)
+        charts['feature_importance'] = base64.b64encode(buf.read()).decode('utf-8')
+        plt.close()
+    else:
+        charts['feature_importance'] = ""
+
+    # ML Stats
+    high_risk = sum(1 for k, v in risk_scores.items() if k != "_metadata" and v['risk_level'] == 'High')
+    med_risk = sum(1 for k, v in risk_scores.items() if k != "_metadata" and v['risk_level'] == 'Medium')
+    total = len([k for k in risk_scores.keys() if k != "_metadata"])
+
+    most_common_pattern = max(patterns, key=patterns.get) if any(patterns.values()) else "None"
+
+    stats = {
+        'total_analysed': total,
+        'high_count': high_risk,
+        'high_pct': round(high_risk / total * 100, 1) if total > 0 else 0,
+        'med_count': med_risk,
+        'med_pct': round(med_risk / total * 100, 1) if total > 0 else 0,
+        'most_common_pattern': most_common_pattern
+    }
+
+    return charts, stats

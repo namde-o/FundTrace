@@ -18,6 +18,7 @@ from graph_engine import (
     build_graph,
     calculate_risk_scores,
     build_pyvis_graph,
+    generate_analytics_charts
 )
 
 app = Flask(__name__)
@@ -30,6 +31,8 @@ _df          = None   # The raw transactions dataframe
 _graph       = None   # The NetworkX DiGraph
 _risk_scores = None   # {account_id: {score, reasons, risk_level}}
 _graph_html  = None   # The Pyvis HTML string for the iframe
+_analytics_charts = None
+_ml_stats = None
 
 
 def load_and_process(filepath):
@@ -44,7 +47,7 @@ def load_and_process(filepath):
     Returns:
         str|None: Error message if something went wrong, else None
     """
-    global _df, _graph, _risk_scores, _graph_html
+    global _df, _graph, _risk_scores, _graph_html, _analytics_charts, _ml_stats
 
     # ── Read & Validate ──
     try:
@@ -65,6 +68,7 @@ def load_and_process(filepath):
     _graph       = build_graph(df)
     _risk_scores = calculate_risk_scores(_graph, df)
     _graph_html  = build_pyvis_graph(_graph, _risk_scores)
+    _analytics_charts, _ml_stats = generate_analytics_charts(df, _risk_scores)
     return None  # No error
 
 
@@ -102,8 +106,8 @@ def index():
     stats = {
         "total_accounts":    len(_graph.nodes()),
         "total_transactions": len(_df),
-        "high_risk_count":   sum(1 for v in _risk_scores.values() if v["risk_level"] == "High"),
-        "medium_risk_count": sum(1 for v in _risk_scores.values() if v["risk_level"] == "Medium"),
+        "high_risk_count":   sum(1 for k, v in _risk_scores.items() if k != "_metadata" and v["risk_level"] == "High"),
+        "medium_risk_count": sum(1 for k, v in _risk_scores.items() if k != "_metadata" and v["risk_level"] == "Medium"),
     }
 
     return render_template("index.html",
@@ -143,8 +147,8 @@ def upload():
         "message": "File processed successfully",
         "total_accounts":    len(_graph.nodes()),
         "total_transactions": len(_df),
-        "high_risk_count":   sum(1 for v in _risk_scores.values() if v["risk_level"] == "High"),
-        "medium_risk_count": sum(1 for v in _risk_scores.values() if v["risk_level"] == "Medium"),
+        "high_risk_count":   sum(1 for k, v in _risk_scores.items() if k != "_metadata" and v["risk_level"] == "High"),
+        "medium_risk_count": sum(1 for k, v in _risk_scores.items() if k != "_metadata" and v["risk_level"] == "Medium"),
     })
 
 
@@ -187,7 +191,7 @@ def risk_leaderboard():
 
     # Sort accounts by score descending, then alphabetically for ties
     sorted_accounts = sorted(
-        _risk_scores.items(),
+        [(k, v) for k, v in _risk_scores.items() if k != "_metadata"],
         key=lambda x: (-x[1]["score"], x[0])
     )[:15]
 
@@ -209,6 +213,21 @@ def graph_html_route():
         return "No graph data available.", 503
     return _graph_html, 200, {"Content-Type": "text/html"}
 
+
+
+@app.route("/graph")
+def graph_page():
+    return render_template("graph.html")
+
+@app.route("/analytics")
+def analytics_page():
+    if _analytics_charts is None:
+        return "Analytics not generated. Please run data generator and restart.", 503
+    return render_template("analytics.html", charts=_analytics_charts, ml_stats=_ml_stats)
+
+@app.route("/upload", methods=["GET"])
+def upload_page():
+    return render_template("upload.html")
 
 # ── Run 
 if __name__ == "__main__":

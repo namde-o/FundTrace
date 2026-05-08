@@ -5,3 +5,7 @@ flask>=3.0.0          # Web framework — serves the dashboard and API routes
 pandas>=2.0.0         # Data loading and manipulation (CSV → DataFrame)
 networkx>=3.0         # Graph construction and cycle detection
 pyvis>=0.3.2          # Interactive graph visualization (generates Pyvis HTML)
+scikit-learn>=1.0
+numpy>=1.21.0
+matplotlib>=3.5.0
+seaborn>=0.11.0

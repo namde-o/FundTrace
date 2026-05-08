@@ -1,0 +1,69 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div style="padding: 24px; overflow-y: auto; height: calc(100vh - 56px);">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+        <h4>Data Science Dashboard</h4>
+        <button class="action-btn" onclick="window.print()">📥 Export Charts as PDF</button>
+    </div>
+
+    <!-- ML Stats Panel -->
+    <div class="stats-panel" style="display: flex; gap: 20px; margin-bottom: 24px;">
+        <div class="stat-box">
+            <div class="stat-label">Model Engine</div>
+            <div class="stat-value" style="font-size: 16px;">Isolation Forest + Random Forest</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">Total Analysed</div>
+            <div class="stat-value">{{ ml_stats.total_analysed }}</div>
+        </div>
+        <div class="stat-box" style="border-bottom: 3px solid var(--high);">
+            <div class="stat-label">High Risk</div>
+            <div class="stat-value high">{{ ml_stats.high_count }} <span style="font-size: 14px; color: var(--muted)">({{ ml_stats.high_pct }}%)</span></div>
+        </div>
+        <div class="stat-box" style="border-bottom: 3px solid var(--medium);">
+            <div class="stat-label">Medium Risk</div>
+            <div class="stat-value medium">{{ ml_stats.med_count }} <span style="font-size: 14px; color: var(--muted)">({{ ml_stats.med_pct }}%)</span></div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">Most Common Pattern</div>
+            <div class="stat-value" style="font-size: 18px;">{{ ml_stats.most_common_pattern }}</div>
+        </div>
+    </div>
+
+    <!-- Charts Grid -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+        <div class="chart-card">
+            <h6>Transaction Amount Distribution</h6>
+            <img src="data:image/png;base64,{{ charts.amount_dist }}" style="width: 100%; height: auto; border-radius: 4px;" alt="Amount Distribution" />
+        </div>
+        <div class="chart-card">
+            <h6>Fraud Pattern Breakdown</h6>
+            <img src="data:image/png;base64,{{ charts.fraud_patterns }}" style="width: 100%; height: auto; border-radius: 4px;" alt="Fraud Patterns" />
+        </div>
+        <div class="chart-card">
+            <h6>Transaction Volume Over Time</h6>
+            <img src="data:image/png;base64,{{ charts.volume_time }}" style="width: 100%; height: auto; border-radius: 4px;" alt="Volume Over Time" />
+        </div>
+        <div class="chart-card">
+            <h6>Top 10 Riskiest Accounts</h6>
+            <img src="data:image/png;base64,{{ charts.top_risky }}" style="width: 100%; height: auto; border-radius: 4px;" alt="Riskiest Accounts" />
+        </div>
+        <div class="chart-card">
+            <h6>Feature Correlation Heatmap</h6>
+            {% if charts.correlation %}
+                <img src="data:image/png;base64,{{ charts.correlation }}" style="width: 100%; height: auto; border-radius: 4px;" alt="Correlation Heatmap" />
+            {% else %}
+                <div style="padding: 40px; text-align: center; color: var(--muted);">Not enough data for correlation heatmap</div>
+            {% endif %}
+        </div>
+        <div class="chart-card">
+            <h6>Feature Importance</h6>
+            {% if charts.feature_importance %}
+                <img src="data:image/png;base64,{{ charts.feature_importance }}" style="width: 100%; height: auto; border-radius: 4px;" alt="Feature Importance" />
+            {% else %}
+                <div style="padding: 40px; text-align: center; color: var(--muted);">Feature importance unavailable</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

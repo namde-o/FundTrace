@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 random.seed(42)  # Fixed seed for reproducible results
 
 # All 60 account IDs
-ACCOUNTS = [f"ACC{str(i).zfill(3)}" for i in range(1, 61)]
+ACCOUNTS = [f"ACC{str(i).zfill(3)}" for i in range(1, 81)]
 
 CHANNELS = ["mobile", "UPI", "branch", "NEFT", "RTGS"]
 BRANCHES = ["Mumbai", "Delhi", "Pune", "Chennai", "Hyderabad"]
@@ -28,13 +28,19 @@ START_DATE = NOW - timedelta(days=90)      # 90-day window for transactions
 
 
 def random_timestamp(start=START_DATE, end=NOW):
-    """Return a random datetime between start and end."""
+    """Return a random datetime between start and end. More likely to be on a weekend."""
     delta = end - start
-    random_seconds = random.randint(0, int(delta.total_seconds()))
-    return start + timedelta(seconds=random_seconds)
+    while True:
+        random_seconds = random.randint(0, int(delta.total_seconds()))
+        ts = start + timedelta(seconds=random_seconds)
+        # 60% chance to accept if weekend, 20% if weekday
+        if ts.weekday() >= 5:
+            if random.random() < 0.6: return ts
+        else:
+            if random.random() < 0.2: return ts
 
 
-def make_txn(tx_id, sender, receiver, amount, timestamp=None, channel=None, branch=None):
+def make_txn(tx_id, sender, receiver, amount, timestamp=None, channel=None, branch=None, transaction_type=None, location=None, device_id=None):
     """Helper that builds a single transaction dictionary."""
     return {
         "transaction_id": f"TXN{str(tx_id).zfill(5)}",
@@ -44,6 +50,9 @@ def make_txn(tx_id, sender, receiver, amount, timestamp=None, channel=None, bran
         "timestamp": (timestamp or random_timestamp()).strftime("%Y-%m-%d %H:%M:%S"),
         "channel": channel or random.choice(CHANNELS),
         "branch": branch or random.choice(BRANCHES),
+        "transaction_type": transaction_type or random.choice(["NEFT", "IMPS", "UPI", "RTGS"]),
+        "location": location or random.choice(["Mumbai", "Delhi", "Pune", "Chennai", "Hyderabad", "Bangalore", "Kolkata"]),
+        "device_id": device_id or f"DEV{random.randint(1000, 9999)}",
     }
 
 
@@ -139,25 +148,50 @@ def generate_hub_pattern(start_id):
 
 def generate_transactions():
     """
-    Builds the full 300-row transactions list.
+    Builds the full 1000-row transactions list.
     First adds all planted fraud transactions, then fills the rest
     with normal random transactions between random accounts.
     """
     txns = []
     tx_id = 1
 
-    # Plant the 4 fraud patterns
-    circular   = generate_circular_pattern(tx_id);        txns.extend(circular);   tx_id += len(circular)
-    structured = generate_structuring_pattern(tx_id);     txns.extend(structured); tx_id += len(structured)
-    dormant    = generate_dormant_account_pattern(tx_id); txns.extend(dormant);    tx_id += len(dormant)
-    hub        = generate_hub_pattern(tx_id);             txns.extend(hub);        tx_id += len(hub)
+    # Plant multiple instances of the 4 fraud patterns
+    # Pattern 1
+    for offset in range(0, 5):
+        circular   = generate_circular_pattern(tx_id); txns.extend(circular); tx_id += len(circular)
+        # slightly hacky but works for the demo: rename accounts in the new pattern
+        if offset > 0:
+            for t in circular:
+                t['sender_id'] = f"ACC{int(t['sender_id'][3:]) + offset*10:03d}"
+                t['receiver_id'] = f"ACC{int(t['receiver_id'][3:]) + offset*10:03d}"
 
-    # Fill remaining rows with normal transactions (up to 300 total)
-    fraud_accounts = {"ACC001","ACC002","ACC003","ACC004",
-                      "ACC010","ACC011","ACC012","ACC013","ACC014","ACC015","ACC016",
-                      "ACC020","ACC021","ACC022","ACC030"}
+    # Pattern 2
+    for offset in range(0, 4):
+        structured = generate_structuring_pattern(tx_id); txns.extend(structured); tx_id += len(structured)
+        if offset > 0:
+             for t in structured:
+                 t['sender_id'] = f"ACC{int(t['sender_id'][3:]) + offset*20:03d}"
+                 t['receiver_id'] = f"ACC{int(t['receiver_id'][3:]) + offset*20:03d}"
 
-    while len(txns) < 300:
+    # Pattern 3
+    for offset in range(0, 3):
+        dormant    = generate_dormant_account_pattern(tx_id); txns.extend(dormant); tx_id += len(dormant)
+        if offset > 0:
+            for t in dormant:
+                 t['sender_id'] = f"ACC{int(t['sender_id'][3:]) + offset*10:03d}"
+                 t['receiver_id'] = f"ACC{int(t['receiver_id'][3:]) + offset*10:03d}"
+
+    # Pattern 4
+    for offset in range(0, 4):
+        hub        = generate_hub_pattern(tx_id); txns.extend(hub); tx_id += len(hub)
+        if offset > 0:
+            for t in hub:
+                 t['sender_id'] = f"ACC{int(t['sender_id'][3:]) + offset*5:03d}"
+                 if t['receiver_id'] == 'ACC030':
+                     t['receiver_id'] = f"ACC{30 + offset*5:03d}"
+
+    # Fill remaining rows with normal transactions (up to 1000 total)
+    while len(txns) < 1000:
         sender   = random.choice(ACCOUNTS)
         receiver = random.choice(ACCOUNTS)
         if sender == receiver:
@@ -178,7 +212,7 @@ def generate_transactions():
 if __name__ == "__main__":
     print("Generating synthetic transactions...")
     transactions = generate_transactions()
-    df = pd.DataFrame(transactions[:300])  # Trim to exactly 300 rows
+    df = pd.DataFrame(transactions[:1000])  # Trim to exactly 300 rows
 
     # Sort by timestamp so the CSV reads naturally chronological
     df.sort_values("timestamp", inplace=True)
