@@ -1,28 +1,5 @@
-<!DOCTYPE html>
-
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FundTrace — Bank Fund Flow Intelligence</title>
-  <meta name="description" content="Interactive fraud detection dashboard for tracking fund flows within a bank using graph analysis." />
-
-  
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-  
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
-</head>
-<body>
-
-<div id="header">
-  <div class="logo">
-    
-    🔍 Fund<span class="dot">Trace</span>
-  </div>
-  <div class="subtitle">Bank Fund Flow Intelligence Dashboard &nbsp;·&nbsp; Fraud Detection Engine</div>
-</div>
+{% extends 'layout.html' %}
+{% block content %}
 
 {% if error %}
 <div id="error-banner">
@@ -46,17 +23,7 @@
   <div id="content-panel">
 
     
-    <div class="panel-header">
-      <h5>📊 Transaction Flow Graph</h5>
-      <div style="display:flex;gap:10px;align-items:center;">
-        
-        <button id="upload-btn" onclick="document.getElementById('csv-file-input').click()">
-          ⬆ Upload CSV
-        </button>
-        
-        <input type="file" id="csv-file-input" accept=".csv" onchange="handleUpload(this)" />
-      </div>
-    </div>
+    <div class="panel-header" style="display:none;"></div>
 
     
     <div id="graph-container">
@@ -135,15 +102,22 @@ async function loadLeaderboard() {
     list.innerHTML = top10.map(account => `
       <div class="account-card" id="card-${account.account_id}"
            onclick="selectAccount('${account.account_id}', this)">
-        <div class="risk-badge ${account.risk_level}">${account.score}</div>
-        <div class="account-info">
-          <div class="acc-id">${account.account_id}</div>
-          <div class="acc-level">${account.risk_level} Risk
-            ${account.reasons.length ? '· ' + account.reasons.length + ' flag(s)' : ''}
-          </div>
+        <div style="flex: 1;">
+            <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <div class="acc-id">${account.account_id}</div>
+                <div class="acc-level" style="font-weight: bold; color: var(--${account.risk_level.toLowerCase()});">${account.score}/100</div>
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-bar-fill ${account.risk_level}" style="width: ${account.score}%"></div>
+            </div>
+            <div class="acc-level" style="margin-top: 6px;">
+                Rule: ${account.rule_score} | ML: ${Math.max(account.iso_score, account.rf_score)}
+            </div>
         </div>
       </div>
     `).join("");
+    // Add Export Button at the bottom
+    list.innerHTML += `<button onclick="exportRiskCSV()" class="export-btn" style="margin-top: 10px; width: 100%;">📥 Export Risk Report as CSV</button>`;
 
   } catch (e) {
     list.innerHTML = '<div style="color:var(--high);padding:12px;font-size:12px;">Failed to load leaderboard</div>';
@@ -194,27 +168,53 @@ async function selectAccount(accountId, cardEl) {
       </tr>
     `).join("");
 
+    const featuresHtml = Object.entries(data.risk.features || {}).map(([k, v]) => `<div><span style="color:var(--muted)">${k}:</span> <b>${typeof v === 'number' ? v.toFixed(2) : v}</b></div>`).join('');
+
     body.innerHTML = `
-      <div style="padding:8px 0 6px;">
-        <strong style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Risk Flags</strong><br>
-        <div style="margin-top:4px;">${riskHtml}</div>
-        <div style="margin-top:6px;font-size:12px;color:var(--muted);">
-          Total Sent: <strong style="color:var(--high)">₹${Number(data.total_sent).toLocaleString('en-IN',{maximumFractionDigits:0})}</strong>
-          &nbsp;|&nbsp;
-          Total Received: <strong style="color:var(--low)">₹${Number(data.total_received).toLocaleString('en-IN',{maximumFractionDigits:0})}</strong>
-          &nbsp;|&nbsp;
-          ${allTxns.length} transaction(s)
-        </div>
+      <div style="display:flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+          <div>
+            <strong style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Risk Score Breakdown</strong><br>
+            <div style="margin-top:4px; display:flex; gap: 10px;">
+                <div class="score-box"><b>Final</b><br><span style="color:var(--${data.risk.risk_level.toLowerCase()})">${data.risk.score}/100</span></div>
+                <div class="score-box"><b>Rule Base</b><br>${data.risk.rule_score}</div>
+                <div class="score-box"><b>Isolation Forest</b><br>${data.risk.iso_score}</div>
+                <div class="score-box"><b>Random Forest</b><br>${data.risk.rf_score}</div>
+            </div>
+          </div>
+          <div style="display:flex; gap: 8px;">
+            <button class="action-btn" onclick="showToast('Account marked as reviewed')">✅ Mark Reviewed</button>
+            <button class="action-btn" onclick="exportAccountReport('${accountId}')">📥 Export Report</button>
+          </div>
       </div>
-      <table class="txn-table">
-        <thead>
-          <tr>
-            <th>TXN ID</th><th>Dir</th><th>Counterparty</th>
-            <th>Amount</th><th>Timestamp</th><th>Channel</th><th>Branch</th>
-          </tr>
-        </thead>
-        <tbody>${rows || '<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:10px;">No transactions found</td></tr>'}</tbody>
-      </table>
+      <div style="display:flex; gap: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--border);">
+          <div style="flex: 1;">
+            <strong style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">ML Flags & Reasons</strong><br>
+            <div style="margin-top:4px;">${riskHtml}</div>
+            <div style="margin-top:6px;font-size:12px;color:var(--muted);">
+              Total Sent: <strong style="color:var(--high)">₹${Number(data.total_sent).toLocaleString('en-IN',{maximumFractionDigits:0})}</strong> | Total Received: <strong style="color:var(--low)">₹${Number(data.total_received).toLocaleString('en-IN',{maximumFractionDigits:0})}</strong>
+            </div>
+          </div>
+          <div style="flex: 1; font-size: 11px;">
+            <strong style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Graph Metrics</strong><br>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 4px;">
+                ${featuresHtml}
+            </div>
+          </div>
+      </div>
+      <div style="margin-top: 12px;">
+          <strong style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Transaction History (${allTxns.length})</strong>
+          <div style="max-height: 250px; overflow-y: auto; margin-top: 8px; border: 1px solid var(--border); border-radius: 6px;">
+              <table class="txn-table">
+                <thead>
+                  <tr>
+                    <th>TXN ID</th><th>Dir</th><th>Counterparty</th>
+                    <th>Amount</th><th>Timestamp</th><th>Channel</th><th>Branch</th>
+                  </tr>
+                </thead>
+                <tbody>${rows || '<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:10px;">No transactions found</td></tr>'}</tbody>
+              </table>
+          </div>
+      </div>
     `;
 
   } catch (e) {
@@ -279,7 +279,35 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 });
+
+function exportRiskCSV() {
+    fetch("/api/risk-leaderboard").then(res => res.json()).then(data => {
+        let csvContent = "data:text/csv;charset=utf-8,AccountID,RiskLevel,Score,RuleScore,IsoScore,RFScore,Flags\n";
+        data.forEach(row => {
+            let flags = row.reasons.join("; ");
+            csvContent += `${row.account_id},${row.risk_level},${row.score},${row.rule_score},${row.iso_score},${row.rf_score},"${flags}"\n`;
+        });
+        var encodedUri = encodeURI(csvContent);
+        var link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "fundtrace_risk_report.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    });
+}
+
+function exportAccountReport(accountId) {
+    let content = "data:text/plain;charset=utf-8,Account Report: " + accountId + "\n\n";
+    content += document.getElementById("detail-body").innerText;
+    var encodedUri = encodeURI(content);
+    var link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `${accountId}_report.txt`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
 </script>
 
-</body>
-</html>
+{% endblock %}

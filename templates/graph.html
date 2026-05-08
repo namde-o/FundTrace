@@ -1,0 +1,73 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div id="main-layout">
+  <div id="sidebar">
+    <h6>🔎 Graph Controls</h6>
+    <div style="padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+        <input type="text" id="search-account" class="form-control" placeholder="Search Account ID..." onkeyup="searchGraph(this.value)">
+        <hr style="border-color: var(--border);">
+        <button class="filter-btn active" onclick="filterGraph('All', this)">Show All Accounts</button>
+        <button class="filter-btn" onclick="filterGraph('High', this)">Show High Risk Only</button>
+        <button class="filter-btn" onclick="filterGraph('Medium', this)">Show Medium Risk Only</button>
+        <button class="filter-btn" onclick="filterGraph('Cycles', this)">Show Cycles Only</button>
+        <button class="filter-btn" onclick="filterGraph('Hubs', this)">Show Hubs Only</button>
+        <hr style="border-color: var(--border);">
+        <div style="display: flex; gap: 10px;">
+            <button class="action-btn" style="flex: 1;" onclick="zoomIn()">➕ Zoom In</button>
+            <button class="action-btn" style="flex: 1;" onclick="zoomOut()">➖ Zoom Out</button>
+        </div>
+        <button class="action-btn" onclick="resetZoom()">🔄 Reset View</button>
+        <hr style="border-color: var(--border);">
+        <button class="action-btn" onclick="takeSnapshot()">📸 Take Snapshot</button>
+    </div>
+  </div>
+
+  <div id="content-panel">
+    <div id="graph-container">
+      <div id="graph-loading"><span>🔄</span> Rendering graph...</div>
+      <iframe
+        id="graph-iframe"
+        src="/api/graph-html"
+        onload="document.getElementById('graph-loading').style.display='none';"
+        title="Fund Flow Graph"
+      ></iframe>
+    </div>
+  </div>
+</div>
+
+<script>
+    function getIframeWindow() {
+        return document.getElementById('graph-iframe').contentWindow;
+    }
+
+    function filterGraph(type, btn) {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        getIframeWindow().postMessage({ action: 'filter', type: type }, '*');
+    }
+
+    let searchTimeout;
+    function searchGraph(val) {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            getIframeWindow().postMessage({ action: 'search', value: val }, '*');
+        }, 500); // Debounce search
+    }
+
+    function takeSnapshot() {
+        getIframeWindow().postMessage({ action: 'snapshot' }, '*');
+    }
+
+    function resetZoom() {
+        getIframeWindow().postMessage({ action: 'resetZoom' }, '*');
+    }
+
+    function zoomIn() {
+        getIframeWindow().postMessage({ action: 'zoomIn' }, '*');
+    }
+
+    function zoomOut() {
+        getIframeWindow().postMessage({ action: 'zoomOut' }, '*');
+    }
+</script>
+{% endblock %}

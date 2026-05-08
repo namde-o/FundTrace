@@ -1,0 +1,115 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div style="padding: 24px; max-width: 800px; margin: 0 auto; overflow-y: auto; height: calc(100vh - 56px);">
+    <div class="upload-card">
+        <h4>Upload New Data</h4>
+        <p style="color: var(--muted); margin-bottom: 20px;">Upload a CSV containing bank transactions. We will parse it and run ML analysis.</p>
+
+        <input type="file" id="csv-input" accept=".csv" class="form-control" style="margin-bottom: 20px;" onchange="previewCSV(this)">
+
+        <div id="preview-section" style="display: none; margin-bottom: 20px;">
+            <h6>Preview (First 10 rows)</h6>
+            <div style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px;">
+                <table class="txn-table" id="preview-table">
+                    <thead id="preview-head"></thead>
+                    <tbody id="preview-body"></tbody>
+                </table>
+            </div>
+            <div id="validation-msg" style="margin-top: 10px; font-weight: bold;"></div>
+        </div>
+
+        <button id="process-btn" class="action-btn" style="width: 100%; display: none;" onclick="submitCSV()">Run ML Analysis</button>
+
+        <div id="loading-spinner" style="display: none; text-align: center; margin-top: 20px;">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p style="margin-top: 10px; color: var(--muted);">Running Graph Extraction & Isolation Forest...</p>
+        </div>
+
+        <div id="summary-card" style="display: none; margin-top: 20px; background: rgba(42,157,143,0.1); border: 1px solid var(--low); padding: 16px; border-radius: 8px;">
+            <h6 style="color: var(--low);">✅ Analysis Complete</h6>
+            <ul id="summary-list" style="margin-top: 10px; color: var(--text);"></ul>
+            <a href="/" class="action-btn" style="display: inline-block; margin-top: 10px; text-decoration: none;">Go to Dashboard</a>
+        </div>
+    </div>
+</div>
+
+<script>
+    let selectedFile = null;
+
+    function previewCSV(input) {
+        if (!input.files.length) return;
+        selectedFile = input.files[0];
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const text = e.target.result;
+            const rows = text.split('\n').filter(r => r.trim() !== '');
+            if(rows.length === 0) return;
+
+            const headers = rows[0].split(',');
+            const required = ["sender_id", "receiver_id", "amount", "timestamp"];
+            const missing = required.filter(r => !headers.includes(r));
+
+            const valMsg = document.getElementById("validation-msg");
+            const btn = document.getElementById("process-btn");
+
+            if(missing.length > 0) {
+                valMsg.innerHTML = `<span style="color: var(--high);">❌ Missing required columns: ${missing.join(', ')}</span>`;
+                btn.style.display = 'none';
+            } else {
+                valMsg.innerHTML = `<span style="color: var(--low);">✅ Validation Passed. Ready to analyze.</span>`;
+                btn.style.display = 'block';
+            }
+
+            // Build preview table
+            document.getElementById("preview-head").innerHTML = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
+
+            const tbody = document.getElementById("preview-body");
+            tbody.innerHTML = '';
+            for(let i=1; i < Math.min(11, rows.length); i++) {
+                const cells = rows[i].split(',');
+                tbody.innerHTML += `<tr>${cells.map(c => `<td>${c}</td>`).join('')}</tr>`;
+            }
+
+            document.getElementById("preview-section").style.display = 'block';
+            document.getElementById("summary-card").style.display = 'none';
+        };
+        reader.readAsText(selectedFile);
+    }
+
+    async function submitCSV() {
+        if(!selectedFile) return;
+
+        document.getElementById("process-btn").style.display = 'none';
+        document.getElementById("loading-spinner").style.display = 'block';
+
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+
+        try {
+            const res = await fetch("/upload", { method: "POST", body: formData });
+            const data = await res.json();
+
+            document.getElementById("loading-spinner").style.display = 'none';
+
+            if(data.error) {
+                alert("Error: " + data.error);
+                document.getElementById("process-btn").style.display = 'block';
+            } else {
+                const list = document.getElementById("summary-list");
+                list.innerHTML = `
+                    <li><b>Total Accounts:</b> ${data.total_accounts}</li>
+                    <li><b>Total Transactions:</b> ${data.total_transactions}</li>
+                    <li><b style="color: var(--high);">High Risk Found:</b> ${data.high_risk_count}</li>
+                    <li><b style="color: var(--medium);">Medium Risk Found:</b> ${data.medium_risk_count}</li>
+                `;
+                document.getElementById("summary-card").style.display = 'block';
+            }
+        } catch(e) {
+            document.getElementById("loading-spinner").style.display = 'none';
+            alert("Upload failed.");
+            console.error(e);
+        }
+    }
+</script>
+{% endblock %}
