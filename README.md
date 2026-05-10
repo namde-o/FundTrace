@@ -2,6 +2,7 @@
 
 FundTrace is a Flask-based fraud analytics dashboard for bank transaction monitoring.  
 It combines graph analysis and ML-based scoring to identify risky accounts and suspicious fund movement patterns.
+Originally built for a bank hackathon theme: **Tracking of Funds within the Bank for Fraud Detection**.
 
 ## Highlights
 
@@ -19,6 +20,8 @@ It combines graph analysis and ML-based scoring to identify risky accounts and s
 |---|---|
 | Circular flow | Account is part of a directed cycle involving at least 3 distinct accounts (example: A → B → C → A) |
 | Structuring | 4+ outgoing transactions just below ₹10,000 (₹8,000–₹9,999) within 24 hours |
+
+> Note: The structuring amount band is currently hardcoded in `graph_engine.py` (`detect_structuring`) and can be adapted for other thresholds/currencies.
 | Dormant activation | 60+ day inactivity gap before activity |
 | Hub account | In-degree (incoming sources) ≥ 8 |
 
