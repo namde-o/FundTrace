@@ -17,8 +17,8 @@ It combines graph analysis and ML-based scoring to identify risky accounts and s
 
 | Pattern | Rule |
 |---|---|
-| Circular flow | Account is part of a directed cycle (length ≥ 3) |
-| Structuring | 4+ outgoing transactions in ₹8,000–₹9,999 within 24 hours |
+| Circular flow | Account is part of a directed cycle with 3+ accounts (example: A → B → C → A) |
+| Structuring | 4+ outgoing transactions in ₹8,000–₹9,999 within 24 hours (a specific sub-₹10,000 band used by this model) |
 | Dormant activation | 60+ day inactivity gap before activity |
 | Hub account | In-degree (incoming sources) ≥ 8 |
 
