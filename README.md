@@ -50,7 +50,7 @@ pip install -r requirements.txt
 python data_generator.py
 ```
 
-This creates `transactions.csv` (1000 synthetic records with planted fraud patterns).
+This creates `transactions.csv` (1000 synthetic transactions across 80 account IDs), including planted fraud patterns and extra fields such as `transaction_type`, `location`, and `device_id`.
 
 ### 3) Run the app
 
